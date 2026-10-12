@@ -1,0 +1,161 @@
+{
+	"name": "pl_ingest_invoices_incremental",
+	"properties": {
+		"activities": [
+			{
+				"name": "Check_New_Rows",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@concat(\n  'SELECT COUNT(1) AS total_rows ',\n  'FROM invoices WITH (NOLOCK) ',\n  'WHERE updated_at >= ''', pipeline().parameters.WindowStart, ''' ',\n  '  AND updated_at < ''', pipeline().parameters.WindowEnd, ''''\n)\n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "AzureSqlTable1",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "If record exist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check_New_Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('Check_New_Rows').output.firstRow.total_rows, 0)\n",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Copy_Invoices_Delta_copy1",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat(\n  'SELECT invoice_id, subscription_id, invoice_amount, currency, ',\n  'billing_period_start, billing_period_end, due_date, payment_status, ',\n  'payment_method, created_at, updated_at ',\n  'FROM invoices WITH (NOLOCK) ',\n  'WHERE updated_at >= ''', pipeline().parameters.WindowStart, ''' ',\n  '  AND updated_at < ''', pipeline().parameters.WindowEnd, ''''\n)\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "AzureSqlTable1",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Parquet1",
+									"type": "DatasetReference"
+								}
+							]
+						},
+						{
+							"name": "nb_process_invoices_dq_silver_gold_copy1",
+							"type": "SynapseNotebook",
+							"dependsOn": [
+								{
+									"activity": "Copy_Invoices_Delta_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebook": {
+									"referenceName": "nb_process_invoices_dq_silver_gold",
+									"type": "NotebookReference"
+								},
+								"parameters": {
+									"target_file_path": {
+										"value": {
+											"value": "@concat(\n  'abfss://raw@sadatapulse360lak.dfs.core.windows.net/invoices/year=', \n  formatDateTime(pipeline().TriggerTime, 'yyyy'), \n  '/month=', \n  formatDateTime(pipeline().TriggerTime, 'MM'), \n  '/invoices_delta_', \n  pipeline().RunId, \n  '.parquet'\n)\n",
+											"type": "Expression"
+										},
+										"type": "string"
+									}
+								},
+								"snapshot": true,
+								"sparkPool": {
+									"referenceName": "sparkpoolsmall",
+									"type": "BigDataPoolReference"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"WindowStart": {
+				"type": "string"
+			},
+			"WindowEnd": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-10-12T16:45:53Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

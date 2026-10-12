@@ -1,0 +1,28 @@
+{
+	"name": "Parquet1",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "datapulse360dl",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@concat('invoices_delta_', pipeline().RunId, '.parquet')",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@concat('invoices/year=', formatDateTime(pipeline().TriggerTime, 'yyyy'), '/month=', formatDateTime(pipeline().TriggerTime, 'MM'))",
+					"type": "Expression"
+				},
+				"fileSystem": "raw"
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

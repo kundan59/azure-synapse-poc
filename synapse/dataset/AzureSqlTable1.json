@@ -1,0 +1,66 @@
+{
+	"name": "AzureSqlTable1",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_azuresql_source",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "invoice_id",
+				"type": "varchar"
+			},
+			{
+				"name": "subscription_id",
+				"type": "varchar"
+			},
+			{
+				"name": "invoice_amount",
+				"type": "decimal",
+				"precision": 12,
+				"scale": 2
+			},
+			{
+				"name": "currency",
+				"type": "varchar"
+			},
+			{
+				"name": "billing_period_start",
+				"type": "date"
+			},
+			{
+				"name": "billing_period_end",
+				"type": "date"
+			},
+			{
+				"name": "due_date",
+				"type": "date"
+			},
+			{
+				"name": "payment_status",
+				"type": "varchar"
+			},
+			{
+				"name": "payment_method",
+				"type": "varchar"
+			},
+			{
+				"name": "created_at",
+				"type": "datetime2",
+				"scale": 7
+			},
+			{
+				"name": "updated_at",
+				"type": "datetime2",
+				"scale": 7
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "invoices"
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

@@ -1,0 +1,17 @@
+{
+	"name": "SQL script 1",
+	"properties": {
+		"content": {
+			"query": "CREATE DATABASE GoldAnalyticsDB;\nGO\nUSE GoldAnalyticsDB;\nGO\n-- 2. Create Logical View Over Gold Delta Lake\nCREATE OR ALTER VIEW vw_fact_invoices AS\nSELECT \n    invoice_id,\n    subscription_id,\n    invoice_amount,\n    currency,\n    payment_status,\n    payment_method,\n    due_date,\n    invoice_date,\n    collected_amount,\n    overdue_amount\nFROM OPENROWSET(\n    BULK 'https://sadatapulse360lak.dfs.core.windows.net/gold/fact_invoices/',\n    FORMAT = 'DELTA'\n) AS [result];\nGO\n-- 3. Test View Query\nSELECT * FROM vw_fact_invoices;\nGO\n\nSELECT \n    COUNT(*) AS total_rows,\n    COUNT(DISTINCT invoice_id) AS unique_invoices\nFROM vw_fact_invoices;",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "GoldAnalyticsDB",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
