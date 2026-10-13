@@ -585,7 +585,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "9cca8355-5b0f-48d3-aeba-571dbdbb293e"
+						"spark.autotune.trackingId": "630328ef-b534-4cec-829c-86f9a9ac7659"
 					}
 				},
 				"metadata": {
@@ -705,32 +705,29 @@
 							"validation_results = validation_definition.run(batch_parameters={\"dataframe\": df_gold})\n",
 							"\n",
 							"# ==============================================================================\n",
-							"# 6. Evaluation & Circuit Breaker Logic\n",
+							"# 6. Detailed Failure Reporter & Circuit Breaker\n",
 							"# ==============================================================================\n",
 							"success = validation_results.success\n",
-							"statistics = validation_results.statistics\n",
-							"\n",
-							"print(\"=\" * 60)\n",
-							"print(f\" GREAT EXPECTATIONS VALIDATION RESULT: {'PASSED' if success else 'FAILED'}\")\n",
-							"print(f\" Evaluated Expectations: {statistics.get('evaluated_expectations', 0)}\")\n",
-							"print(f\" Successful Expectations: {statistics.get('successful_expectations', 0)}\")\n",
-							"print(f\" Unsuccessful Expectations: {statistics.get('unsuccessful_expectations', 0)}\")\n",
-							"print(f\" Success Percent: {statistics.get('success_percent', 0):.2f}%\")\n",
-							"print(\"=\" * 60)\n",
-							"\n",
-							"# If any critical check failed, print details and fail the pipeline\n",
 							"if not success:\n",
-							"    print(\"\\n--- Failed Expectations Details ---\")\n",
+							"    # Build a detailed, formatted error message listing each failed rule\n",
+							"    failure_details = []\n",
 							"    for res in validation_results.results:\n",
 							"        if not res.success:\n",
-							"            rule_name = res.expectation_config.type\n",
-							"            kwargs = res.expectation_config.kwargs\n",
-							"            print(f\"Failed: {rule_name} on {kwargs}\")\n",
+							"            rule_type = res.expectation_config.type\n",
+							"            column_info = res.expectation_config.kwargs\n",
+							"            failure_details.append(f\"Failed Rule: [{rule_type}] with params {column_info}\")\n",
 							"    \n",
-							"    # Circuit Breaker: Fail this Synapse Activity so ADF halts execution!\n",
-							"    raise ValueError(\"Data Quality threshold breached! Gold table has invalid records. Halting pipeline.\")\n",
+							"    error_summary = \"\\n\".join(failure_details)\n",
+							"    \n",
+							"    # This text will now appear directly inside the ADF pipeline error popup!\n",
+							"    raise ValueError(\n",
+							"        f\"\\n\\n================ DATA QUALITY BREACH ================\\n\"\n",
+							"        f\"{error_summary}\\n\"\n",
+							"        f\"=====================================================\\n\"\n",
+							"    )\n",
 							"else:\n",
 							"    print(\"All Great Expectations validations passed! Ready for Power BI consumption.\")\n",
+							"\n",
 							""
 						],
 						"outputs": [],
@@ -762,15 +759,16 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "f9586df6-01be-44db-834b-e1d2b84acb8b"
+						"spark.autotune.trackingId": "308d5b16-a661-47e4-99d6-f8c4d6b4b4b2"
 					}
 				},
 				"metadata": {
 					"saveOutput": true,
-					"synapse_widget": {
-						"version": "0.1"
-					},
 					"enableDebugMode": false,
+					"kernelspec": {
+						"name": "synapse_pyspark",
+						"display_name": "Synapse PySpark"
+					},
 					"language_info": {
 						"name": "python"
 					},
@@ -781,14 +779,13 @@
 						"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
 						"auth": {
 							"type": "AAD",
-							"authResource": "https://dev.azuresynapse.net",
-							"authHeader": null
+							"authResource": "https://dev.azuresynapse.net"
 						},
 						"sparkVersion": "3.5",
 						"nodeCount": 3,
 						"cores": 4,
 						"memory": 28,
-						"extraHeader": null
+						"automaticScaleJobs": false
 					},
 					"sessionKeepAliveTimeout": 30
 				},
@@ -804,7 +801,8 @@
 							"# This is a parameter cell. ADF will override this value at runtime!\n",
 							"target_file_path = \"\""
 						],
-						"outputs": []
+						"outputs": [],
+						"execution_count": null
 					},
 					{
 						"cell_type": "code",
@@ -943,7 +941,7 @@
 							"    col(\"payment_status\"),\n",
 							"    col(\"payment_method\"),\n",
 							"    to_date(col(\"due_date\")).alias(\"due_date\"),\n",
-							"    to_date(col(\"created_at\")).alias(\"invoice_date\"),\n",
+							"    to_date(col(\"billing_period_start\")).alias(\"invoice_date\"),\n",
 							"    when(col(\"payment_status\") == \"PAID\", col(\"invoice_amount\")).otherwise(lit(0.0)).alias(\"collected_amount\"),\n",
 							"    when(col(\"payment_status\") == \"OVERDUE\", col(\"invoice_amount\")).otherwise(lit(0.0)).alias(\"overdue_amount\")\n",
 							")\n",
@@ -972,7 +970,8 @@
 							"print(f\"Successfully processed {df_gold_incremental.count()} CDF records into Gold!\")\n",
 							""
 						],
-						"outputs": []
+						"outputs": [],
+						"execution_count": null
 					}
 				]
 			},
