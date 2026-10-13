@@ -139,6 +139,43 @@
 								"sparkPool": {
 									"referenceName": "sparkpoolsmall",
 									"type": "BigDataPoolReference"
+								},
+								"conf": {
+									"spark.dynamicAllocation.enabled": null,
+									"spark.dynamicAllocation.minExecutors": null,
+									"spark.dynamicAllocation.maxExecutors": null
+								},
+								"numExecutors": null
+							}
+						},
+						{
+							"name": "nb_gold_data_quality_gx",
+							"type": "SynapseNotebook",
+							"dependsOn": [
+								{
+									"activity": "nb_process_invoices_dq_silver_gold_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebook": {
+									"referenceName": "nb_gold_data_quality_gx",
+									"type": "NotebookReference"
+								},
+								"snapshot": true,
+								"sparkPool": {
+									"referenceName": "sparkpoolsmall",
+									"type": "BigDataPoolReference"
 								}
 							}
 						}
