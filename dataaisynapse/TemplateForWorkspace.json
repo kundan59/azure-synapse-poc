@@ -487,7 +487,7 @@
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"annotations": [],
-				"runtimeState": "Started",
+				"runtimeState": "Stopped",
 				"pipeline": {
 					"pipelineReference": {
 						"referenceName": "pl_ingest_invoices_incremental",
@@ -585,7 +585,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "630328ef-b534-4cec-829c-86f9a9ac7659"
+						"spark.autotune.trackingId": "a4f15c70-9a59-4d28-a61c-d67c03ae201f"
 					}
 				},
 				"metadata": {
@@ -759,7 +759,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "308d5b16-a661-47e4-99d6-f8c4d6b4b4b2"
+						"spark.autotune.trackingId": "70ab0765-0ac5-4833-bdff-d9a556abdc50"
 					}
 				},
 				"metadata": {
