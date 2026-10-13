@@ -585,7 +585,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "88e94f6b-2649-4d13-a83b-5f3ef391bb89"
+						"spark.autotune.trackingId": "66e23ed7-63b3-481f-ae72-95cde2ac0bee"
 					}
 				},
 				"metadata": {
@@ -610,21 +610,15 @@
 						"sparkVersion": "3.5",
 						"nodeCount": 3,
 						"cores": 4,
-						"memory": 28
+						"memory": 28,
+						"automaticScaleJobs": false
 					},
 					"sessionKeepAliveTimeout": 30
 				},
 				"cells": [
 					{
 						"cell_type": "code",
-						"source": [
-							"%pip install great_expectations"
-						],
-						"outputs": [],
-						"execution_count": null
-					},
-					{
-						"cell_type": "code",
+						"metadata": {},
 						"source": [
 							"# ==============================================================================\n",
 							"# Great Expectations Data Quality Suite for Gold Delta Table\n",
@@ -768,7 +762,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "2ba2f64e-6cdc-4308-8708-2762211a0361"
+						"spark.autotune.trackingId": "af1f1482-9acb-4e27-aace-deffce9b18fd"
 					}
 				},
 				"metadata": {
@@ -793,15 +787,13 @@
 						"sparkVersion": "3.5",
 						"nodeCount": 3,
 						"cores": 4,
-						"memory": 28,
-						"automaticScaleJobs": false
+						"memory": 28
 					},
 					"sessionKeepAliveTimeout": 30
 				},
 				"cells": [
 					{
 						"cell_type": "code",
-						"metadata": {},
 						"source": [
 							"# ==============================================================================\n",
 							"# Great Expectations Data Quality Suite for Gold Delta Table\n",
