@@ -233,7 +233,12 @@
 											"referenceName": "sparkpoolsmall",
 											"type": "BigDataPoolReference"
 										},
-										"conf": {}
+										"conf": {
+											"spark.dynamicAllocation.enabled": null,
+											"spark.dynamicAllocation.minExecutors": null,
+											"spark.dynamicAllocation.maxExecutors": null
+										},
+										"numExecutors": null
 									}
 								}
 							]
@@ -464,6 +469,53 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/ls_keyvault')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('ls_keyvault_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/tr_invoices_hourly_window')]",
+			"type": "Microsoft.Synapse/workspaces/triggers",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "pl_ingest_invoices_incremental",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"WindowStart": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart')]",
+						"WindowEnd": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Minute",
+					"interval": 5,
+					"startTime": "2026-10-13T10:11:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
 			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
 			"apiVersion": "2019-06-01-preview",
@@ -513,6 +565,191 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/nb_gold_data_quality_gx')]",
+			"type": "Microsoft.Synapse/workspaces/notebooks",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"nbformat": 4,
+				"nbformat_minor": 2,
+				"bigDataPool": {
+					"referenceName": "sparkpoolsmall",
+					"type": "BigDataPoolReference"
+				},
+				"sessionProperties": {
+					"driverMemory": "28g",
+					"driverCores": 4,
+					"executorMemory": "28g",
+					"executorCores": 4,
+					"numExecutors": 2,
+					"conf": {
+						"spark.dynamicAllocation.enabled": "false",
+						"spark.dynamicAllocation.minExecutors": "2",
+						"spark.dynamicAllocation.maxExecutors": "2",
+						"spark.autotune.trackingId": "fac26ece-4ef4-4eb7-ab46-d51d11e006bc"
+					}
+				},
+				"metadata": {
+					"saveOutput": true,
+					"enableDebugMode": false,
+					"kernelspec": {
+						"name": "synapse_pyspark",
+						"display_name": "Synapse PySpark"
+					},
+					"language_info": {
+						"name": "python"
+					},
+					"a365ComputeOptions": {
+						"id": "/subscriptions/2fbd330e-3c8f-4d39-bcf2-5aeb14a84032/resourceGroups/Data-AI-rs/providers/Microsoft.Synapse/workspaces/dataaisynapse/bigDataPools/sparkpoolsmall",
+						"name": "sparkpoolsmall",
+						"type": "Spark",
+						"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
+						"auth": {
+							"type": "AAD",
+							"authResource": "https://dev.azuresynapse.net"
+						},
+						"sparkVersion": "3.5",
+						"nodeCount": 3,
+						"cores": 4,
+						"memory": 28,
+						"automaticScaleJobs": false
+					},
+					"sessionKeepAliveTimeout": 30
+				},
+				"cells": [
+					{
+						"cell_type": "code",
+						"metadata": {},
+						"source": [
+							"%pip install great_expectations"
+						],
+						"outputs": [],
+						"execution_count": null
+					},
+					{
+						"cell_type": "code",
+						"metadata": {},
+						"source": [
+							"# ==============================================================================\n",
+							"# Great Expectations Data Quality Suite for Gold Delta Table\n",
+							"# ==============================================================================\n",
+							"import great_expectations as gx\n",
+							"from great_expectations.core.expectation_suite import ExpectationSuite\n",
+							"from delta.tables import DeltaTable\n",
+							"from pyspark.sql import SparkSession\n",
+							"\n",
+							"# 1. Load Gold Delta Table\n",
+							"STORAGE_ACCOUNT = \"sadatapulse360lak\"\n",
+							"GOLD_PATH = f\"abfss://gold@{STORAGE_ACCOUNT}.dfs.core.windows.net/fact_invoices\"\n",
+							"\n",
+							"df_gold = spark.read.format(\"delta\").load(GOLD_PATH)\n",
+							"row_count = df_gold.count()\n",
+							"print(f\"Loaded Gold Delta Table with {row_count} rows for validation.\")\n",
+							"\n",
+							"# 2. Initialize In-Memory Great Expectations Context\n",
+							"context = gx.get_context(mode=\"ephemeral\")\n",
+							"\n",
+							"# 3. Connect PySpark DataFrame as a GX Data Source\n",
+							"data_source = context.data_sources.add_spark(name=\"synapse_gold_source\")\n",
+							"data_asset = data_source.add_dataframe_asset(name=\"fact_invoices_asset\")\n",
+							"batch_definition = data_asset.add_batch_definition_whole_dataframe(\"gold_batch\")\n",
+							"batch = batch_definition.get_batch(batch_parameters={\"dataframe\": df_gold})\n",
+							"\n",
+							"# 4. Define Expectation Suite (Business Quality Rules)\n",
+							"suite = context.suites.add(ExpectationSuite(name=\"gold_fact_invoices_suite\"))\n",
+							"\n",
+							"# Rule 1: Row count must not be empty\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectTableRowCountToBeBetween(min_value=1)\n",
+							")\n",
+							"\n",
+							"# Rule 2: Primary Key (invoice_id) must NEVER be null\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectColumnValuesToNotBeNull(column=\"invoice_id\")\n",
+							")\n",
+							"\n",
+							"# Rule 3: Primary Key (invoice_id) must be UNIQUE (Zero duplicates)\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectColumnValuesToBeUnique(column=\"invoice_id\")\n",
+							")\n",
+							"\n",
+							"# Rule 4: invoice_amount must be positive (No negative billing)\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectColumnValuesToBeBetween(column=\"invoice_amount\", min_value=0.0)\n",
+							")\n",
+							"\n",
+							"# Rule 5: payment_status must belong strictly to valid enum\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectColumnValuesToBeInSet(\n",
+							"        column=\"payment_status\",\n",
+							"        value_set=[\"PAID\", \"PENDING\", \"OVERDUE\", \"REFUNDED\"]\n",
+							"    )\n",
+							")\n",
+							"\n",
+							"# Rule 6: Currency must be standard 3-letter ISO code\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectColumnValuesToBeInSet(\n",
+							"        column=\"currency\",\n",
+							"        value_set=[\"USD\", \"EUR\", \"GBP\", \"INR\", \"CAD\"]\n",
+							"    )\n",
+							")\n",
+							"\n",
+							"# Rule 7: due_date must be greater than or equal to invoice_date\n",
+							"suite.add_expectation(\n",
+							"    gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(\n",
+							"        column_A=\"due_date\",\n",
+							"        column_B=\"invoice_date\",\n",
+							"        or_equal=True\n",
+							"    )\n",
+							")\n",
+							"\n",
+							"# 5. Execute Validation\n",
+							"validation_definition = context.validation_definitions.add(\n",
+							"    gx.ValidationDefinition(\n",
+							"        name=\"gold_validation_def\",\n",
+							"        data=batch_definition,\n",
+							"        suite=suite\n",
+							"    )\n",
+							")\n",
+							"\n",
+							"validation_results = validation_definition.run(batch_parameters={\"dataframe\": df_gold})\n",
+							"\n",
+							"# ==============================================================================\n",
+							"# 6. Evaluation & Circuit Breaker Logic\n",
+							"# ==============================================================================\n",
+							"success = validation_results.success\n",
+							"statistics = validation_results.statistics\n",
+							"\n",
+							"print(\"=\" * 60)\n",
+							"print(f\" GREAT EXPECTATIONS VALIDATION RESULT: {'PASSED' if success else 'FAILED'}\")\n",
+							"print(f\" Evaluated Expectations: {statistics.get('evaluated_expectations', 0)}\")\n",
+							"print(f\" Successful Expectations: {statistics.get('successful_expectations', 0)}\")\n",
+							"print(f\" Unsuccessful Expectations: {statistics.get('unsuccessful_expectations', 0)}\")\n",
+							"print(f\" Success Percent: {statistics.get('success_percent', 0):.2f}%\")\n",
+							"print(\"=\" * 60)\n",
+							"\n",
+							"# If any critical check failed, print details and fail the pipeline\n",
+							"if not success:\n",
+							"    print(\"\\n--- Failed Expectations Details ---\")\n",
+							"    for res in validation_results.results:\n",
+							"        if not res.success:\n",
+							"            rule_name = res.expectation_config.type\n",
+							"            kwargs = res.expectation_config.kwargs\n",
+							"            print(f\"Failed: {rule_name} on {kwargs}\")\n",
+							"    \n",
+							"    # Circuit Breaker: Fail this Synapse Activity so ADF halts execution!\n",
+							"    raise ValueError(\"Data Quality threshold breached! Gold table has invalid records. Halting pipeline.\")\n",
+							"else:\n",
+							"    print(\"All Great Expectations validations passed! Ready for Power BI consumption.\")\n",
+							""
+						],
+						"outputs": [],
+						"execution_count": null
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/nb_process_invoices_dq_silver_gold')]",
 			"type": "Microsoft.Synapse/workspaces/notebooks",
 			"apiVersion": "2019-06-01-preview",
@@ -534,15 +771,16 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "f9586df6-01be-44db-834b-e1d2b84acb8b"
+						"spark.autotune.trackingId": "23a71497-5f15-4950-845d-f7cdf4f069ce"
 					}
 				},
 				"metadata": {
 					"saveOutput": true,
-					"synapse_widget": {
-						"version": "0.1"
-					},
 					"enableDebugMode": false,
+					"kernelspec": {
+						"name": "synapse_pyspark",
+						"display_name": "python"
+					},
 					"language_info": {
 						"name": "python"
 					},
@@ -553,14 +791,13 @@
 						"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
 						"auth": {
 							"type": "AAD",
-							"authResource": "https://dev.azuresynapse.net",
-							"authHeader": null
+							"authResource": "https://dev.azuresynapse.net"
 						},
 						"sparkVersion": "3.5",
 						"nodeCount": 3,
 						"cores": 4,
 						"memory": 28,
-						"extraHeader": null
+						"automaticScaleJobs": false
 					},
 					"sessionKeepAliveTimeout": 30
 				},
@@ -576,7 +813,8 @@
 							"# This is a parameter cell. ADF will override this value at runtime!\n",
 							"target_file_path = \"\""
 						],
-						"outputs": []
+						"outputs": [],
+						"execution_count": null
 					},
 					{
 						"cell_type": "code",
@@ -744,7 +982,8 @@
 							"print(f\"Successfully processed {df_gold_incremental.count()} CDF records into Gold!\")\n",
 							""
 						],
-						"outputs": []
+						"outputs": [],
+						"execution_count": null
 					}
 				]
 			},
@@ -768,235 +1007,17 @@
 				"nodeSize": "Small",
 				"nodeSizeFamily": "MemoryOptimized",
 				"sparkVersion": "3.5",
+				"libraryRequirements": {
+					"content": "psycopg2-binary>=2.9.9\npymongo>=4.6.0\nfaker>=24.0.0\npython-dotenv>=1.0.0\n",
+					"filename": "requirements.txt",
+					"time": "2026-10-13T10:04:14.9578762Z"
+				},
 				"isComputeIsolationEnabled": false,
 				"sessionLevelPackagesEnabled": false,
 				"annotations": []
 			},
 			"dependsOn": [],
 			"location": "centralindia"
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/ls_keyvault')]",
-			"type": "Microsoft.Synapse/workspaces/linkedServices",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"type": "AzureKeyVault",
-				"typeProperties": {
-					"baseUrl": "[parameters('ls_keyvault_properties_typeProperties_baseUrl')]"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/nb_gold_data_quality_gx')]",
-			"type": "Microsoft.Synapse/workspaces/notebooks",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"nbformat": 4,
-				"nbformat_minor": 2,
-				"bigDataPool": {
-					"referenceName": "sparkpoolsmall",
-					"type": "BigDataPoolReference"
-				},
-				"sessionProperties": {
-					"driverMemory": "28g",
-					"driverCores": 4,
-					"executorMemory": "28g",
-					"executorCores": 4,
-					"numExecutors": 2,
-					"conf": {
-						"spark.dynamicAllocation.enabled": "false",
-						"spark.dynamicAllocation.minExecutors": "2",
-						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "1f542849-955b-499d-a882-fd2503dc4053"
-					}
-				},
-				"metadata": {
-					"saveOutput": true,
-					"enableDebugMode": false,
-					"kernelspec": {
-						"name": "synapse_pyspark",
-						"display_name": "Synapse PySpark"
-					},
-					"language_info": {
-						"name": "python"
-					},
-					"a365ComputeOptions": {
-						"id": "/subscriptions/2fbd330e-3c8f-4d39-bcf2-5aeb14a84032/resourceGroups/Data-AI-rs/providers/Microsoft.Synapse/workspaces/dataaisynapse/bigDataPools/sparkpoolsmall",
-						"name": "sparkpoolsmall",
-						"type": "Spark",
-						"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
-						"auth": {
-							"type": "AAD",
-							"authResource": "https://dev.azuresynapse.net"
-						},
-						"sparkVersion": "3.5",
-						"nodeCount": 3,
-						"cores": 4,
-						"memory": 28,
-						"automaticScaleJobs": false
-					},
-					"sessionKeepAliveTimeout": 30
-				},
-				"cells": [
-					{
-						"cell_type": "code",
-						"metadata": {},
-						"source": [
-							"# ==============================================================================\n",
-							"# Great Expectations Data Quality Suite for Gold Delta Table\n",
-							"# ==============================================================================\n",
-							"import great_expectations as gx\n",
-							"from great_expectations.core.expectation_suite import ExpectationSuite\n",
-							"from delta.tables import DeltaTable\n",
-							"from pyspark.sql import SparkSession\n",
-							"\n",
-							"# 1. Load Gold Delta Table\n",
-							"STORAGE_ACCOUNT = \"sadatapulse360lak\"\n",
-							"GOLD_PATH = f\"abfss://gold@{STORAGE_ACCOUNT}.dfs.core.windows.net/fact_invoices\"\n",
-							"\n",
-							"df_gold = spark.read.format(\"delta\").load(GOLD_PATH)\n",
-							"row_count = df_gold.count()\n",
-							"print(f\"Loaded Gold Delta Table with {row_count} rows for validation.\")\n",
-							"\n",
-							"# 2. Initialize In-Memory Great Expectations Context\n",
-							"context = gx.get_context(mode=\"ephemeral\")\n",
-							"\n",
-							"# 3. Connect PySpark DataFrame as a GX Data Source\n",
-							"data_source = context.data_sources.add_spark(name=\"synapse_gold_source\")\n",
-							"data_asset = data_source.add_dataframe_asset(name=\"fact_invoices_asset\")\n",
-							"batch_definition = data_asset.add_batch_definition_whole_dataframe(\"gold_batch\")\n",
-							"batch = batch_definition.get_batch(batch_parameters={\"dataframe\": df_gold})\n",
-							"\n",
-							"# 4. Define Expectation Suite (Business Quality Rules)\n",
-							"suite = context.suites.add(ExpectationSuite(name=\"gold_fact_invoices_suite\"))\n",
-							"\n",
-							"# Rule 1: Row count must not be empty\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectTableRowCountToBeBetween(min_value=1)\n",
-							")\n",
-							"\n",
-							"# Rule 2: Primary Key (invoice_id) must NEVER be null\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectColumnValuesToNotBeNull(column=\"invoice_id\")\n",
-							")\n",
-							"\n",
-							"# Rule 3: Primary Key (invoice_id) must be UNIQUE (Zero duplicates)\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectColumnValuesToBeUnique(column=\"invoice_id\")\n",
-							")\n",
-							"\n",
-							"# Rule 4: invoice_amount must be positive (No negative billing)\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectColumnValuesToBeBetween(column=\"invoice_amount\", min_value=0.0)\n",
-							")\n",
-							"\n",
-							"# Rule 5: payment_status must belong strictly to valid enum\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectColumnValuesToBeInSet(\n",
-							"        column=\"payment_status\",\n",
-							"        value_set=[\"PAID\", \"PENDING\", \"OVERDUE\", \"REFUNDED\"]\n",
-							"    )\n",
-							")\n",
-							"\n",
-							"# Rule 6: Currency must be standard 3-letter ISO code\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectColumnValuesToBeInSet(\n",
-							"        column=\"currency\",\n",
-							"        value_set=[\"USD\", \"EUR\", \"GBP\", \"INR\", \"CAD\"]\n",
-							"    )\n",
-							")\n",
-							"\n",
-							"# Rule 7: due_date must be greater than or equal to invoice_date\n",
-							"suite.add_expectation(\n",
-							"    gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(\n",
-							"        column_A=\"due_date\",\n",
-							"        column_B=\"invoice_date\",\n",
-							"        or_equal=True\n",
-							"    )\n",
-							")\n",
-							"\n",
-							"# 5. Execute Validation\n",
-							"validation_definition = context.validation_definitions.add(\n",
-							"    gx.ValidationDefinition(\n",
-							"        name=\"gold_validation_def\",\n",
-							"        data=batch_definition,\n",
-							"        suite=suite\n",
-							"    )\n",
-							")\n",
-							"\n",
-							"validation_results = validation_definition.run(batch_parameters={\"dataframe\": df_gold})\n",
-							"\n",
-							"# ==============================================================================\n",
-							"# 6. Evaluation & Circuit Breaker Logic\n",
-							"# ==============================================================================\n",
-							"success = validation_results.success\n",
-							"statistics = validation_results.statistics\n",
-							"\n",
-							"print(\"=\" * 60)\n",
-							"print(f\" GREAT EXPECTATIONS VALIDATION RESULT: {'PASSED' if success else 'FAILED'}\")\n",
-							"print(f\" Evaluated Expectations: {statistics.get('evaluated_expectations', 0)}\")\n",
-							"print(f\" Successful Expectations: {statistics.get('successful_expectations', 0)}\")\n",
-							"print(f\" Unsuccessful Expectations: {statistics.get('unsuccessful_expectations', 0)}\")\n",
-							"print(f\" Success Percent: {statistics.get('success_percent', 0):.2f}%\")\n",
-							"print(\"=\" * 60)\n",
-							"\n",
-							"# If any critical check failed, print details and fail the pipeline\n",
-							"if not success:\n",
-							"    print(\"\\n--- Failed Expectations Details ---\")\n",
-							"    for res in validation_results.results:\n",
-							"        if not res.success:\n",
-							"            rule_name = res.expectation_config.type\n",
-							"            kwargs = res.expectation_config.kwargs\n",
-							"            print(f\"Failed: {rule_name} on {kwargs}\")\n",
-							"    \n",
-							"    # Circuit Breaker: Fail this Synapse Activity so ADF halts execution!\n",
-							"    raise ValueError(\"Data Quality threshold breached! Gold table has invalid records. Halting pipeline.\")\n",
-							"else:\n",
-							"    print(\"All Great Expectations validations passed! Ready for Power BI consumption.\")\n",
-							""
-						],
-						"outputs": [],
-						"execution_count": null
-					}
-				]
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/tr_invoices_hourly_window')]",
-			"type": "Microsoft.Synapse/workspaces/triggers",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"runtimeState": "Started",
-				"pipeline": {
-					"pipelineReference": {
-						"referenceName": "pl_ingest_invoices_incremental",
-						"type": "PipelineReference"
-					},
-					"parameters": {
-						"WindowStart": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart')]",
-						"WindowEnd": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd')]"
-					}
-				},
-				"type": "TumblingWindowTrigger",
-				"typeProperties": {
-					"frequency": "Minute",
-					"interval": 5,
-					"startTime": "2026-10-13T10:11:00Z",
-					"delay": "00:00:00",
-					"maxConcurrency": 50,
-					"retryPolicy": {
-						"intervalInSeconds": 30
-					},
-					"dependsOn": []
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
-			]
 		}
 	]
 }
