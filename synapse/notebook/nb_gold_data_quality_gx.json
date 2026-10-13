@@ -17,7 +17,7 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "88e94f6b-2649-4d13-a83b-5f3ef391bb89"
+				"spark.autotune.trackingId": "e64a42af-5ef0-4114-b233-041c1b569f06"
 			}
 		},
 		"metadata": {
@@ -48,13 +48,6 @@
 			"sessionKeepAliveTimeout": 30
 		},
 		"cells": [
-			{
-				"cell_type": "code",
-				"source": [
-					"%pip install great_expectations"
-				],
-				"execution_count": null
-			},
 			{
 				"cell_type": "code",
 				"source": [
