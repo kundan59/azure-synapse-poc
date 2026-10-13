@@ -1,0 +1,29 @@
+{
+	"name": "tr_invoices_hourly_window",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipeline": {
+			"pipelineReference": {
+				"referenceName": "pl_ingest_invoices_incremental",
+				"type": "PipelineReference"
+			},
+			"parameters": {
+				"WindowStart": "@trigger().outputs.windowStartTime",
+				"WindowEnd": "@trigger().outputs.windowEndTime"
+			}
+		},
+		"type": "TumblingWindowTrigger",
+		"typeProperties": {
+			"frequency": "Minute",
+			"interval": 5,
+			"startTime": "2026-10-13T10:11:00Z",
+			"delay": "00:00:00",
+			"maxConcurrency": 50,
+			"retryPolicy": {
+				"intervalInSeconds": 30
+			},
+			"dependsOn": []
+		}
+	}
+}
