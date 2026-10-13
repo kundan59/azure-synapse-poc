@@ -1,0 +1,793 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"type": "string",
+			"metadata": "Workspace name",
+			"defaultValue": "dataaisynapse"
+		},
+		"dataaisynapse-WorkspaceDefaultSqlServer_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'dataaisynapse-WorkspaceDefaultSqlServer'",
+			"defaultValue": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:dataaisynapse.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
+		},
+		"dataaisynapse-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://dataaisynapsestorage.dfs.core.windows.net"
+		},
+		"datapulse360dl_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://sadatapulse360lak.dfs.core.windows.net/"
+		},
+		"ls_azuresql_source_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "sql-datapulse360-srv.database.windows.net"
+		},
+		"ls_azuresql_source_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "datapulse360_db"
+		},
+		"ls_azuresql_source_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "dataaiadmin"
+		},
+		"tr_invoices_test_window_properties_pipeline_parameters_WindowStart": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowStartTime"
+		},
+		"tr_invoices_test_window_properties_pipeline_parameters_WindowEnd": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowEndTime"
+		},
+		"ls_keyvault_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://data-ai-sql-db-password.vault.azure.net/"
+		}
+	},
+	"variables": {
+		"workspaceId": "[concat('Microsoft.Synapse/workspaces/', parameters('workspaceName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('workspaceName'), '/pl_ingest_invoices_incremental')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "Check_New_Rows",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "@concat(\n  'SELECT COUNT(1) AS total_rows ',\n  'FROM invoices WITH (NOLOCK) ',\n  'WHERE updated_at >= ''', pipeline().parameters.WindowStart, ''' ',\n  '  AND updated_at < ''', pipeline().parameters.WindowEnd, ''''\n)\n",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "AzureSqlTable1",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "If record exist",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Check_New_Rows",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('Check_New_Rows').output.firstRow.total_rows, 0)\n",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "Copy_Invoices_Delta_copy1",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "@concat(\n  'SELECT invoice_id, subscription_id, invoice_amount, currency, ',\n  'billing_period_start, billing_period_end, due_date, payment_status, ',\n  'payment_method, created_at, updated_at ',\n  'FROM invoices WITH (NOLOCK) ',\n  'WHERE updated_at >= ''', pipeline().parameters.WindowStart, ''' ',\n  '  AND updated_at < ''', pipeline().parameters.WindowEnd, ''''\n)\n",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "AzureSqlTable1",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "Parquet1",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									]
+								},
+								{
+									"name": "nb_process_invoices_dq_silver_gold_copy1",
+									"type": "SynapseNotebook",
+									"dependsOn": [
+										{
+											"activity": "Copy_Invoices_Delta_copy1",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"notebook": {
+											"referenceName": "nb_process_invoices_dq_silver_gold",
+											"type": "NotebookReference"
+										},
+										"parameters": {
+											"target_file_path": {
+												"value": {
+													"value": "@concat(\n  'abfss://raw@sadatapulse360lak.dfs.core.windows.net/invoices/year=', \n  formatDateTime(pipeline().TriggerTime, 'yyyy'), \n  '/month=', \n  formatDateTime(pipeline().TriggerTime, 'MM'), \n  '/invoices_delta_', \n  pipeline().RunId, \n  '.parquet'\n)\n",
+													"type": "Expression"
+												},
+												"type": "string"
+											}
+										},
+										"snapshot": true,
+										"sparkPool": {
+											"referenceName": "sparkpoolsmall",
+											"type": "BigDataPoolReference"
+										},
+										"conf": {
+											"spark.dynamicAllocation.enabled": null,
+											"spark.dynamicAllocation.minExecutors": null,
+											"spark.dynamicAllocation.maxExecutors": null
+										},
+										"numExecutors": null
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"WindowStart": {
+						"type": "string"
+					},
+					"WindowEnd": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-10-12T16:45:53Z"
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/AzureSqlTable1')]",
+				"[concat(variables('workspaceId'), '/datasets/Parquet1')]",
+				"[concat(variables('workspaceId'), '/notebooks/nb_process_invoices_dq_silver_gold')]",
+				"[concat(variables('workspaceId'), '/bigDataPools/sparkpoolsmall')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/AzureSqlTable1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_azuresql_source",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "invoice_id",
+						"type": "varchar"
+					},
+					{
+						"name": "subscription_id",
+						"type": "varchar"
+					},
+					{
+						"name": "invoice_amount",
+						"type": "decimal",
+						"precision": 12,
+						"scale": 2
+					},
+					{
+						"name": "currency",
+						"type": "varchar"
+					},
+					{
+						"name": "billing_period_start",
+						"type": "date"
+					},
+					{
+						"name": "billing_period_end",
+						"type": "date"
+					},
+					{
+						"name": "due_date",
+						"type": "date"
+					},
+					{
+						"name": "payment_status",
+						"type": "varchar"
+					},
+					{
+						"name": "payment_method",
+						"type": "varchar"
+					},
+					{
+						"name": "created_at",
+						"type": "datetime2",
+						"scale": 7
+					},
+					{
+						"name": "updated_at",
+						"type": "datetime2",
+						"scale": 7
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "invoices"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/ls_azuresql_source')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/Parquet1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "datapulse360dl",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@concat('invoices_delta_', pipeline().RunId, '.parquet')",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@concat('invoices/year=', formatDateTime(pipeline().TriggerTime, 'yyyy'), '/month=', formatDateTime(pipeline().TriggerTime, 'MM'))",
+							"type": "Expression"
+						},
+						"fileSystem": "raw"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/datapulse360dl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dataaisynapse-WorkspaceDefaultSqlServer')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"parameters": {
+					"DBName": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlDW",
+				"typeProperties": {
+					"connectionString": "[parameters('dataaisynapse-WorkspaceDefaultSqlServer_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dataaisynapse-WorkspaceDefaultStorage')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('dataaisynapse-WorkspaceDefaultStorage_properties_typeProperties_url')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/datapulse360dl')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('datapulse360dl_properties_typeProperties_url')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/ls_azuresql_source')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('ls_azuresql_source_properties_typeProperties_server')]",
+					"database": "[parameters('ls_azuresql_source_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('ls_azuresql_source_properties_typeProperties_userName')]",
+					"password": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "ls_keyvault",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "sql-db-password",
+						"secretVersion": "734d3d99655b4afb98a0a418650d10c6"
+					},
+					"alwaysEncryptedSettings": {
+						"alwaysEncryptedAkvAuthType": "ManagedIdentity"
+					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]",
+				"[concat(variables('workspaceId'), '/linkedServices/ls_keyvault')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/tr_invoices_test_window')]",
+			"type": "Microsoft.Synapse/workspaces/triggers",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "pl_ingest_invoices_incremental",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"WindowStart": "[parameters('tr_invoices_test_window_properties_pipeline_parameters_WindowStart')]",
+						"WindowEnd": "[parameters('tr_invoices_test_window_properties_pipeline_parameters_WindowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Minute",
+					"interval": 5,
+					"startTime": "2026-10-12T13:19:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
+			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"type": "Managed",
+				"typeProperties": {
+					"computeProperties": {
+						"location": "AutoResolve",
+						"dataFlowProperties": {
+							"computeType": "General",
+							"coreCount": 8,
+							"timeToLive": 0
+						}
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/WorkspaceSystemIdentity')]",
+			"type": "Microsoft.Synapse/workspaces/credentials",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"type": "ManagedIdentity",
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/SQL script 1')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "CREATE DATABASE GoldAnalyticsDB;\nGO\nUSE GoldAnalyticsDB;\nGO\n-- 2. Create Logical View Over Gold Delta Lake\nCREATE OR ALTER VIEW vw_fact_invoices AS\nSELECT \n    invoice_id,\n    subscription_id,\n    invoice_amount,\n    currency,\n    payment_status,\n    payment_method,\n    due_date,\n    invoice_date,\n    collected_amount,\n    overdue_amount\nFROM OPENROWSET(\n    BULK 'https://sadatapulse360lak.dfs.core.windows.net/gold/fact_invoices/',\n    FORMAT = 'DELTA'\n) AS [result];\nGO\n-- 3. Test View Query\nSELECT * FROM vw_fact_invoices;\nGO\n\nSELECT \n    COUNT(*) AS total_rows,\n    COUNT(DISTINCT invoice_id) AS unique_invoices\nFROM vw_fact_invoices;",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "GoldAnalyticsDB",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/nb_process_invoices_dq_silver_gold')]",
+			"type": "Microsoft.Synapse/workspaces/notebooks",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"nbformat": 4,
+				"nbformat_minor": 2,
+				"bigDataPool": {
+					"referenceName": "sparkpoolsmall",
+					"type": "BigDataPoolReference"
+				},
+				"sessionProperties": {
+					"driverMemory": "28g",
+					"driverCores": 4,
+					"executorMemory": "28g",
+					"executorCores": 4,
+					"numExecutors": 2,
+					"runAsWorkspaceSystemIdentity": false,
+					"conf": {
+						"spark.dynamicAllocation.enabled": "false",
+						"spark.dynamicAllocation.minExecutors": "2",
+						"spark.dynamicAllocation.maxExecutors": "2",
+						"spark.autotune.trackingId": "f9586df6-01be-44db-834b-e1d2b84acb8b"
+					}
+				},
+				"metadata": {
+					"saveOutput": true,
+					"synapse_widget": {
+						"version": "0.1"
+					},
+					"enableDebugMode": false,
+					"language_info": {
+						"name": "python"
+					},
+					"a365ComputeOptions": {
+						"id": "/subscriptions/2fbd330e-3c8f-4d39-bcf2-5aeb14a84032/resourceGroups/Data-AI-rs/providers/Microsoft.Synapse/workspaces/dataaisynapse/bigDataPools/sparkpoolsmall",
+						"name": "sparkpoolsmall",
+						"type": "Spark",
+						"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
+						"auth": {
+							"type": "AAD",
+							"authResource": "https://dev.azuresynapse.net",
+							"authHeader": null
+						},
+						"sparkVersion": "3.5",
+						"nodeCount": 3,
+						"cores": 4,
+						"memory": 28,
+						"extraHeader": null
+					},
+					"sessionKeepAliveTimeout": 30
+				},
+				"cells": [
+					{
+						"cell_type": "code",
+						"metadata": {
+							"tags": [
+								"parameters"
+							]
+						},
+						"source": [
+							"# This is a parameter cell. ADF will override this value at runtime!\n",
+							"target_file_path = \"\""
+						],
+						"outputs": []
+					},
+					{
+						"cell_type": "code",
+						"metadata": {
+							"jupyter": {
+								"source_hidden": false,
+								"outputs_hidden": false
+							},
+							"nteract": {
+								"transient": {
+									"deleting": false
+								}
+							}
+						},
+						"source": [
+							"from pyspark.sql import SparkSession\n",
+							"from pyspark.sql.functions import col, lit, when, current_timestamp, to_date\n",
+							"from delta.tables import DeltaTable\n",
+							"\n",
+							"# ==============================================================================\n",
+							"# 1. Paths & Setup\n",
+							"# ==============================================================================\n",
+							"STORAGE_ACCOUNT = \"sadatapulse360lak\"\n",
+							"RAW_PATH = f\"abfss://raw@{STORAGE_ACCOUNT}.dfs.core.windows.net/invoices/*/*/*.parquet\"\n",
+							"SILVER_PATH = f\"abfss://silver@{STORAGE_ACCOUNT}.dfs.core.windows.net/invoices\"\n",
+							"QUARANTINE_PATH = f\"abfss://quarantine@{STORAGE_ACCOUNT}.dfs.core.windows.net/invoices\"\n",
+							"GOLD_PATH = f\"abfss://gold@{STORAGE_ACCOUNT}.dfs.core.windows.net/fact_invoices\"\n",
+							"\n",
+							"# ==============================================================================\n",
+							"# 2. Ingest Bronze (Target File from ADF or Wildcard fallback)\n",
+							"# ==============================================================================\n",
+							"try:\n",
+							"    if 'target_file_path' in locals() and target_file_path and target_file_path.strip() != \"\":\n",
+							"        print(f\"Processing single delta file from ADF: {target_file_path}\")\n",
+							"        df_bronze = spark.read.parquet(target_file_path)\n",
+							"    else:\n",
+							"        print(\"No parameter passed. Falling back to all raw files.\")\n",
+							"        df_bronze = spark.read.parquet(RAW_PATH)\n",
+							"except Exception as e:\n",
+							"    print(\"No raw files found. Exiting.\")\n",
+							"    mssparkutils.notebook.exit(\"No raw files\")\n",
+							"\n",
+							"# Check if empty\n",
+							"if df_bronze.rdd.isEmpty():\n",
+							"    print(\"Bronze dataset is empty. Exiting.\")\n",
+							"    mssparkutils.notebook.exit(\"0 rows\")\n",
+							"\n",
+							"# ==============================================================================\n",
+							"# 3. Data Quality Engine (Quarantine Pattern)\n",
+							"# ==============================================================================\n",
+							"VALID_STATUSES = ['PAID', 'PENDING', 'OVERDUE', 'REFUNDED']\n",
+							"\n",
+							"df_validated = df_bronze.withColumn(\n",
+							"    \"dq_failure_reason\",\n",
+							"    when(col(\"invoice_id\").isNull(), \"FAIL_NULL_INVOICE_ID\")\n",
+							"    .when(col(\"invoice_amount\") < 0, \"FAIL_NEGATIVE_AMOUNT\")\n",
+							"    .when(~col(\"payment_status\").isin(VALID_STATUSES), \"FAIL_INVALID_STATUS\")\n",
+							"    .when(col(\"billing_period_end\") < col(\"billing_period_start\"), \"FAIL_INVALID_DATE_RANGE\")\n",
+							"    .otherwise(\"PASS\")\n",
+							")\n",
+							"\n",
+							"df_quarantine = df_validated.filter(col(\"dq_failure_reason\") != \"PASS\") \\\n",
+							"    .withColumn(\"quarantined_at\", current_timestamp())\n",
+							"\n",
+							"df_silver_clean = df_validated.filter(col(\"dq_failure_reason\") == \"PASS\") \\\n",
+							"    .drop(\"dq_failure_reason\") \\\n",
+							"    .withColumn(\"ingested_at\", current_timestamp())\n",
+							"\n",
+							"# Quarantine bad rows if any exist\n",
+							"if not df_quarantine.rdd.isEmpty():\n",
+							"    df_quarantine.write.mode(\"append\").format(\"delta\").save(QUARANTINE_PATH)\n",
+							"    print(f\"Quarantined {df_quarantine.count()} invalid records.\")\n",
+							"\n",
+							"# ==============================================================================\n",
+							"# 4. Silver Layer Upsert with Change Data Feed (CDF) Enabled\n",
+							"# ==============================================================================\n",
+							"if not DeltaTable.isDeltaTable(spark, SILVER_PATH):\n",
+							"    # Initial load: Create Silver table with Change Data Feed enabled\n",
+							"    df_silver_clean.write \\\n",
+							"        .format(\"delta\") \\\n",
+							"        .mode(\"overwrite\") \\\n",
+							"        .option(\"delta.enableChangeDataFeed\", \"true\") \\\n",
+							"        .save(SILVER_PATH)\n",
+							"    \n",
+							"    silver_table = DeltaTable.forPath(spark, SILVER_PATH)\n",
+							"    current_version = 0\n",
+							"    print(\"Initialized Silver Delta Table with Change Data Feed (Version 0).\")\n",
+							"else:\n",
+							"    silver_table = DeltaTable.forPath(spark, SILVER_PATH)\n",
+							"    \n",
+							"    # Ensure Change Data Feed property is enabled on existing table\n",
+							"    spark.sql(f\"ALTER TABLE delta.`{SILVER_PATH}` SET TBLPROPERTIES (delta.enableChangeDataFeed = true)\")\n",
+							"    \n",
+							"    # Perform Merge into Silver\n",
+							"    silver_table.alias(\"tgt\").merge(\n",
+							"        df_silver_clean.alias(\"src\"),\n",
+							"        \"tgt.invoice_id = src.invoice_id\"\n",
+							"    ).whenMatchedUpdate(set={\n",
+							"        \"subscription_id\": \"src.subscription_id\",\n",
+							"        \"invoice_amount\": \"src.invoice_amount\",\n",
+							"        \"currency\": \"src.currency\",\n",
+							"        \"payment_status\": \"src.payment_status\",\n",
+							"        \"payment_method\": \"src.payment_method\",\n",
+							"        \"due_date\": \"src.due_date\",\n",
+							"        \"created_at\": \"src.created_at\",\n",
+							"        \"updated_at\": \"src.updated_at\",\n",
+							"        \"ingested_at\": \"src.ingested_at\"\n",
+							"    }).whenNotMatchedInsertAll().execute()\n",
+							"    \n",
+							"    # Capture the exact commit version that just happened\n",
+							"    current_version = silver_table.history(1).select(\"version\").collect()[0][\"version\"]\n",
+							"    print(f\"Silver merge committed as Delta Version: {current_version}\")\n",
+							"\n",
+							"# ==============================================================================\n",
+							"# 5. Gold Layer: Read from Silver via Change Data Feed (CDF)\n",
+							"# ==============================================================================\n",
+							"print(f\"Reading Change Data Feed from Silver table at Version {current_version}...\")\n",
+							"\n",
+							"# Read ONLY the changes committed in that exact version from the physical Silver table\n",
+							"df_silver_cdf = spark.read.format(\"delta\") \\\n",
+							"    .option(\"readChangeFeed\", \"true\") \\\n",
+							"    .option(\"startingVersion\", current_version) \\\n",
+							"    .option(\"endingVersion\", current_version) \\\n",
+							"    .load(SILVER_PATH)\n",
+							"\n",
+							"# Delta CDF provides metadata column: `_change_type`\n",
+							"# Values: 'insert', 'update_preimage', 'update_postimage', 'delete'\n",
+							"# For analytics, we only want new inserts and the updated state ('update_postimage')\n",
+							"df_gold_incremental = df_silver_cdf.filter(\n",
+							"    col(\"_change_type\").isin(\"insert\", \"update_postimage\")\n",
+							").select(\n",
+							"    col(\"invoice_id\"),\n",
+							"    col(\"subscription_id\"),\n",
+							"    col(\"invoice_amount\").cast(\"double\"),\n",
+							"    col(\"currency\"),\n",
+							"    col(\"payment_status\"),\n",
+							"    col(\"payment_method\"),\n",
+							"    to_date(col(\"due_date\")).alias(\"due_date\"),\n",
+							"    to_date(col(\"created_at\")).alias(\"invoice_date\"),\n",
+							"    when(col(\"payment_status\") == \"PAID\", col(\"invoice_amount\")).otherwise(lit(0.0)).alias(\"collected_amount\"),\n",
+							"    when(col(\"payment_status\") == \"OVERDUE\", col(\"invoice_amount\")).otherwise(lit(0.0)).alias(\"overdue_amount\")\n",
+							")\n",
+							"\n",
+							"# Merge into Gold Delta Table\n",
+							"if not DeltaTable.isDeltaTable(spark, GOLD_PATH):\n",
+							"    df_gold_incremental.write.format(\"delta\").mode(\"overwrite\").save(GOLD_PATH)\n",
+							"    print(\"Initialized Gold Delta Table.\")\n",
+							"else:\n",
+							"    gold_table = DeltaTable.forPath(spark, GOLD_PATH)\n",
+							"    gold_table.alias(\"tgt\").merge(\n",
+							"        df_gold_incremental.alias(\"src\"),\n",
+							"        \"tgt.invoice_id = src.invoice_id\"\n",
+							"    ).whenMatchedUpdate(set={\n",
+							"        \"subscription_id\": \"src.subscription_id\",\n",
+							"        \"invoice_amount\": \"src.invoice_amount\",\n",
+							"        \"currency\": \"src.currency\",\n",
+							"        \"payment_status\": \"src.payment_status\",\n",
+							"        \"payment_method\": \"src.payment_method\",\n",
+							"        \"due_date\": \"src.due_date\",\n",
+							"        \"invoice_date\": \"src.invoice_date\",\n",
+							"        \"collected_amount\": \"src.collected_amount\",\n",
+							"        \"overdue_amount\": \"src.overdue_amount\"\n",
+							"    }).whenNotMatchedInsertAll().execute()\n",
+							"\n",
+							"print(f\"Successfully processed {df_gold_incremental.count()} CDF records into Gold!\")\n",
+							""
+						],
+						"outputs": []
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/sparkpoolsmall')]",
+			"type": "Microsoft.Synapse/workspaces/bigDataPools",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"autoPause": {
+					"enabled": true,
+					"delayInMinutes": 15
+				},
+				"autoScale": {
+					"enabled": false,
+					"maxNodeCount": 10,
+					"minNodeCount": 3
+				},
+				"nodeCount": 3,
+				"nodeSize": "Small",
+				"nodeSizeFamily": "MemoryOptimized",
+				"sparkVersion": "3.5",
+				"isComputeIsolationEnabled": false,
+				"sessionLevelPackagesEnabled": false,
+				"annotations": []
+			},
+			"dependsOn": [],
+			"location": "centralindia"
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/ls_keyvault')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('ls_keyvault_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}

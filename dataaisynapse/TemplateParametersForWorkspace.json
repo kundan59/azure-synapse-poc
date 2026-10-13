@@ -1,0 +1,36 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"value": "dataaisynapse"
+		},
+		"dataaisynapse-WorkspaceDefaultSqlServer_connectionString": {
+			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:dataaisynapse.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
+		},
+		"dataaisynapse-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"value": "https://dataaisynapsestorage.dfs.core.windows.net"
+		},
+		"datapulse360dl_properties_typeProperties_url": {
+			"value": "https://sadatapulse360lak.dfs.core.windows.net/"
+		},
+		"ls_azuresql_source_properties_typeProperties_server": {
+			"value": "sql-datapulse360-srv.database.windows.net"
+		},
+		"ls_azuresql_source_properties_typeProperties_database": {
+			"value": "datapulse360_db"
+		},
+		"ls_azuresql_source_properties_typeProperties_userName": {
+			"value": "dataaiadmin"
+		},
+		"tr_invoices_test_window_properties_pipeline_parameters_WindowStart": {
+			"value": "@trigger().outputs.windowStartTime"
+		},
+		"tr_invoices_test_window_properties_pipeline_parameters_WindowEnd": {
+			"value": "@trigger().outputs.windowEndTime"
+		},
+		"ls_keyvault_properties_typeProperties_baseUrl": {
+			"value": "https://data-ai-sql-db-password.vault.azure.net/"
+		}
+	}
+}
