@@ -23,14 +23,14 @@
 		"ls_azuresql_source_properties_typeProperties_userName": {
 			"value": "dataaiadmin"
 		},
-		"tr_invoices_test_window_properties_pipeline_parameters_WindowStart": {
-			"value": "@trigger().outputs.windowStartTime"
-		},
-		"tr_invoices_test_window_properties_pipeline_parameters_WindowEnd": {
-			"value": "@trigger().outputs.windowEndTime"
-		},
 		"ls_keyvault_properties_typeProperties_baseUrl": {
 			"value": "https://data-ai-sql-db-password.vault.azure.net/"
+		},
+		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart": {
+			"value": "@trigger().outputs.windowStartTime"
+		},
+		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd": {
+			"value": "@trigger().outputs.windowEndTime"
 		}
 	}
 }

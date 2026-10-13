@@ -32,17 +32,17 @@
 			"type": "string",
 			"defaultValue": "dataaiadmin"
 		},
-		"tr_invoices_test_window_properties_pipeline_parameters_WindowStart": {
-			"type": "string",
-			"defaultValue": "@trigger().outputs.windowStartTime"
-		},
-		"tr_invoices_test_window_properties_pipeline_parameters_WindowEnd": {
-			"type": "string",
-			"defaultValue": "@trigger().outputs.windowEndTime"
-		},
 		"ls_keyvault_properties_typeProperties_baseUrl": {
 			"type": "string",
 			"defaultValue": "https://data-ai-sql-db-password.vault.azure.net/"
+		},
+		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowStartTime"
+		},
+		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowEndTime"
 		}
 	},
 	"variables": {
@@ -464,40 +464,6 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('workspaceName'), '/tr_invoices_test_window')]",
-			"type": "Microsoft.Synapse/workspaces/triggers",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"runtimeState": "Stopped",
-				"pipeline": {
-					"pipelineReference": {
-						"referenceName": "pl_ingest_invoices_incremental",
-						"type": "PipelineReference"
-					},
-					"parameters": {
-						"WindowStart": "[parameters('tr_invoices_test_window_properties_pipeline_parameters_WindowStart')]",
-						"WindowEnd": "[parameters('tr_invoices_test_window_properties_pipeline_parameters_WindowEnd')]"
-					}
-				},
-				"type": "TumblingWindowTrigger",
-				"typeProperties": {
-					"frequency": "Minute",
-					"interval": 5,
-					"startTime": "2026-10-12T13:19:00Z",
-					"delay": "00:00:00",
-					"maxConcurrency": 50,
-					"retryPolicy": {
-						"intervalInSeconds": 30
-					},
-					"dependsOn": []
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
-			]
-		},
-		{
 			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
 			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
 			"apiVersion": "2019-06-01-preview",
@@ -843,7 +809,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "6d17205a-315c-49d0-b96d-0ad9ed7f7053"
+						"spark.autotune.trackingId": "1f542849-955b-499d-a882-fd2503dc4053"
 					}
 				},
 				"metadata": {
@@ -997,6 +963,40 @@
 				]
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/tr_invoices_hourly_window')]",
+			"type": "Microsoft.Synapse/workspaces/triggers",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "pl_ingest_invoices_incremental",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"WindowStart": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart')]",
+						"WindowEnd": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Minute",
+					"interval": 5,
+					"startTime": "2026-10-13T10:11:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
+			]
 		}
 	]
 }
