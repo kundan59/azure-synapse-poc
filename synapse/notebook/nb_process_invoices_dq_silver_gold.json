@@ -18,15 +18,16 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "f9586df6-01be-44db-834b-e1d2b84acb8b"
+				"spark.autotune.trackingId": "446e7f68-cd1b-4432-a7e8-845a2392413b"
 			}
 		},
 		"metadata": {
 			"saveOutput": true,
-			"synapse_widget": {
-				"version": "0.1"
-			},
 			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
 			"language_info": {
 				"name": "python"
 			},
@@ -37,14 +38,13 @@
 				"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
 				"auth": {
 					"type": "AAD",
-					"authResource": "https://dev.azuresynapse.net",
-					"authHeader": null
+					"authResource": "https://dev.azuresynapse.net"
 				},
 				"sparkVersion": "3.5",
 				"nodeCount": 3,
 				"cores": 4,
 				"memory": 28,
-				"extraHeader": null
+				"automaticScaleJobs": false
 			},
 			"sessionKeepAliveTimeout": 30
 		},
@@ -59,7 +59,8 @@
 				"source": [
 					"# This is a parameter cell. ADF will override this value at runtime!\n",
 					"target_file_path = \"\""
-				]
+				],
+				"execution_count": null
 			},
 			{
 				"cell_type": "code",
@@ -198,7 +199,7 @@
 					"    col(\"payment_status\"),\n",
 					"    col(\"payment_method\"),\n",
 					"    to_date(col(\"due_date\")).alias(\"due_date\"),\n",
-					"    to_date(col(\"created_at\")).alias(\"invoice_date\"),\n",
+					"    to_date(col(\"billing_period_start\")).alias(\"invoice_date\"),\n",
 					"    when(col(\"payment_status\") == \"PAID\", col(\"invoice_amount\")).otherwise(lit(0.0)).alias(\"collected_amount\"),\n",
 					"    when(col(\"payment_status\") == \"OVERDUE\", col(\"invoice_amount\")).otherwise(lit(0.0)).alias(\"overdue_amount\")\n",
 					")\n",
@@ -226,7 +227,8 @@
 					"\n",
 					"print(f\"Successfully processed {df_gold_incremental.count()} CDF records into Gold!\")\n",
 					""
-				]
+				],
+				"execution_count": null
 			}
 		]
 	}
