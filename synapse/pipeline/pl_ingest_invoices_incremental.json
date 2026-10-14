@@ -129,7 +129,7 @@
 								"parameters": {
 									"target_file_path": {
 										"value": {
-											"value": "@concat(\n  'abfss://raw@<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/invoices/year=', \n  formatDateTime(pipeline().TriggerTime, 'yyyy'), \n  '/month=', \n  formatDateTime(pipeline().TriggerTime, 'MM'), \n  '/invoices_delta_', \n  pipeline().RunId, \n  '.parquet'\n)\n",
+											"value": "@concat(\n  'abfss://raw@sadatapulse360lak.dfs.core.windows.net/invoices/year=', \n  formatDateTime(pipeline().TriggerTime, 'yyyy'), \n  '/month=', \n  formatDateTime(pipeline().TriggerTime, 'MM'), \n  '/invoices_delta_', \n  pipeline().RunId, \n  '.parquet'\n)\n",
 											"type": "Expression"
 										},
 										"type": "string"
@@ -137,7 +137,7 @@
 								},
 								"snapshot": true,
 								"sparkPool": {
-									"referenceName": "<YOUR_SPARK_POOL_NAME>",
+									"referenceName": "sparkpoolsmall",
 									"type": "BigDataPoolReference"
 								},
 								"conf": {
@@ -174,7 +174,7 @@
 								},
 								"snapshot": true,
 								"sparkPool": {
-									"referenceName": "<YOUR_SPARK_POOL_NAME>",
+									"referenceName": "sparkpoolsmall",
 									"type": "BigDataPoolReference"
 								}
 							}

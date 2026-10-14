@@ -4,7 +4,7 @@
 		"nbformat": 4,
 		"nbformat_minor": 2,
 		"bigDataPool": {
-			"referenceName": "<YOUR_SPARK_POOL_NAME>",
+			"referenceName": "sparkpoolsmall",
 			"type": "BigDataPoolReference"
 		},
 		"sessionProperties": {
@@ -32,10 +32,10 @@
 				"name": "python"
 			},
 			"a365ComputeOptions": {
-				"id": "/subscriptions/<YOUR_SUBSCRIPTION_ID>/resourceGroups/<YOUR_RESOURCE_GROUP>/providers/Microsoft.Synapse/workspaces/<YOUR_SYNAPSE_WORKSPACE>/bigDataPools/<YOUR_SPARK_POOL_NAME>",
-				"name": "<YOUR_SPARK_POOL_NAME>",
+				"id": "/subscriptions/2fbd330e-3c8f-4d39-bcf2-5aeb14a84032/resourceGroups/Data-AI-rs/providers/Microsoft.Synapse/workspaces/dataaisynapse/bigDataPools/sparkpoolsmall",
+				"name": "sparkpoolsmall",
 				"type": "Spark",
-				"endpoint": "https://<YOUR_SYNAPSE_WORKSPACE>.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/<YOUR_SPARK_POOL_NAME>",
+				"endpoint": "https://dataaisynapse.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolsmall",
 				"auth": {
 					"type": "AAD",
 					"authResource": "https://dev.azuresynapse.net"
@@ -83,7 +83,7 @@
 					"# ==============================================================================\n",
 					"# 1. Paths & Setup\n",
 					"# ==============================================================================\n",
-					"STORAGE_ACCOUNT = \"<YOUR_STORAGE_ACCOUNT_NAME>\"\n",
+					"STORAGE_ACCOUNT = \"sadatapulse360lak\"\n",
 					"RAW_PATH = f\"abfss://raw@{STORAGE_ACCOUNT}.dfs.core.windows.net/invoices/*/*/*.parquet\"\n",
 					"SILVER_PATH = f\"abfss://silver@{STORAGE_ACCOUNT}.dfs.core.windows.net/invoices\"\n",
 					"QUARANTINE_PATH = f\"abfss://quarantine@{STORAGE_ACCOUNT}.dfs.core.windows.net/invoices\"\n",
