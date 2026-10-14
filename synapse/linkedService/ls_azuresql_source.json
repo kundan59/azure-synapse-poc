@@ -4,12 +4,12 @@
 		"annotations": [],
 		"type": "AzureSqlDatabase",
 		"typeProperties": {
-			"server": "sql-datapulse360-srv.database.windows.net",
-			"database": "datapulse360_db",
+			"server": "<YOUR_SQL_SERVER_NAME>.database.windows.net",
+			"database": "<YOUR_SQL_DATABASE_NAME>",
 			"encrypt": "mandatory",
 			"trustServerCertificate": false,
 			"authenticationType": "SQL",
-			"userName": "dataaiadmin",
+			"userName": "<YOUR_SQL_ADMIN_USER>",
 			"password": {
 				"type": "AzureKeyVaultSecret",
 				"store": {
@@ -17,7 +17,7 @@
 					"type": "LinkedServiceReference"
 				},
 				"secretName": "sql-db-password",
-				"secretVersion": "734d3d99655b4afb98a0a418650d10c6"
+				"secretVersion": ""
 			},
 			"alwaysEncryptedSettings": {
 				"alwaysEncryptedAkvAuthType": "ManagedIdentity"

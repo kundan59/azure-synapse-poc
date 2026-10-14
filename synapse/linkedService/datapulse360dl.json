@@ -5,7 +5,7 @@
 		"annotations": [],
 		"type": "AzureBlobFS",
 		"typeProperties": {
-			"url": "https://sadatapulse360lak.dfs.core.windows.net/"
+			"url": "https://<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/"
 		},
 		"connectVia": {
 			"referenceName": "AutoResolveIntegrationRuntime",

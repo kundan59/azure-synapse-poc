@@ -30,6 +30,7 @@
    - [Role-Based Access Control (RBAC) & Permissions](#role-based-access-control-rbac--permissions)
    - [Spark Environment & Dependencies](#spark-environment--dependencies)
 8. [Setup & Deployment Guide](#8-setup--deployment-guide)
+   - [Step 0: Pre-Import Configuration & Placeholder Replacement](#step-0-pre-import-configuration--placeholder-replacement)
    - [Step 1: ADLS Gen2 Storage Setup](#step-1-adls-gen2-storage-setup)
    - [Step 2: Azure Key Vault & Secret Storage](#step-2-azure-key-vault--secret-storage)
    - [Step 3: Source Azure SQL Database Setup](#step-3-source-azure-sql-database-setup)
@@ -119,7 +120,7 @@ flowchart LR
         GOLD[("Gold Zone\n(gold/fact_invoices Delta)")]
     end
 
-    subgraph Processing["4. Apache Spark Processing (sparkpoolsmall)"]
+    subgraph Processing["4. Apache Spark Processing (<YOUR_SPARK_POOL_NAME>)"]
         NB1["PySpark Notebook\nnb_process_invoices_dq_silver_gold"]
         NB2["PySpark GX Notebook\nnb_gold_data_quality_gx"]
     end
@@ -149,18 +150,18 @@ flowchart LR
 ### Architectural Components
 
 1. **Source Tier:**
-   - **Azure SQL Database (`datapulse360_db`):** Source OLTP database holding the billing transactions table `dbo.invoices`.
-   - **Azure Key Vault (`data-ai-sql-db-password`):** Secret vault storing the SQL database connection credentials securely.
+   - **Azure SQL Database (`<YOUR_SQL_DATABASE_NAME>`):** Source OLTP database holding the billing transactions table `dbo.invoices`.
+   - **Azure Key Vault (`<YOUR_KEY_VAULT_NAME>`):** Secret vault storing the SQL database connection credentials securely.
 2. **Orchestration Tier:**
    - **Azure Synapse Pipeline (`pl_ingest_invoices_incremental`):** Orchestrator executing the lookup check, data extract, and sequential Spark notebooks.
    - **Tumbling Window Trigger (`tr_invoices_hourly_window`):** Triggers pipeline runs periodically passing historical start/end time windows for zero data loss.
-3. **Data Lake Storage Gen2 (`sadatapulse360lak`):**
+3. **Data Lake Storage Gen2 (`<YOUR_STORAGE_ACCOUNT_NAME>`):**
    - `raw`: Staging zone holding raw delta Parquet files partitioned by year and month.
    - `quarantine`: Delta Lake holding quarantined records tagged with `dq_failure_reason` and `quarantined_at`.
    - `silver`: Curated Delta Lake table with history tracking and Change Data Feed enabled.
    - `gold`: Aggregated business-ready analytical Delta Lake table containing dimensions and calculated financial KPIs.
 4. **Compute Tier:**
-   - **Synapse Apache Spark Pool (`sparkpoolsmall`):** Spark 3.5 runtime with Delta Lake and Great Expectations executing scalable data transformations.
+   - **Synapse Apache Spark Pool (`<YOUR_SPARK_POOL_NAME>`):** Spark 3.5 runtime with Delta Lake and Great Expectations executing scalable data transformations.
 5. **Consumption Tier:**
    - **Serverless SQL Pool (`Built-in`):** On-demand T-SQL engine virtualizing Gold Delta Lake through database `GoldAnalyticsDB`. Secured with a **Database Master Key**, **Database Scoped Credential (`WorkspaceIdentity`)** using Synapse Workspace Managed Identity, an **External Data Source (`DeltaGoldSource`)**, and the analytical view `vw_fact_invoices`.
    - **BI & Analytics:** Power BI, Tableau, Azure Fabric, or Excel consuming the logical views with low latency.
@@ -184,9 +185,9 @@ azure-synapse-poc/
     ├── integrationRuntime/
     │   └── AutoResolveIntegrationRuntime.json     # Built-in Azure Integration Runtime
     ├── linkedService/
-    │   ├── dataaisynapse-WorkspaceDefaultSqlServer.json # Synapse workspace dedicated SQL endpoint
-    │   ├── dataaisynapse-WorkspaceDefaultStorage.json   # Primary workspace ADLS Gen2 filesystem
-    │   ├── datapulse360dl.json                     # ADLS Gen2 linked service for sadatapulse360lak
+    │   ├── <YOUR_SYNAPSE_WORKSPACE>-WorkspaceDefaultSqlServer.json # Synapse workspace dedicated SQL endpoint
+    │   ├── <YOUR_SYNAPSE_WORKSPACE>-WorkspaceDefaultStorage.json   # Primary workspace ADLS Gen2 filesystem
+    │   ├── datapulse360dl.json                     # ADLS Gen2 linked service for <YOUR_STORAGE_ACCOUNT_NAME>
     │   ├── ls_azuresql_source.json                 # Azure SQL DB linked service using AKV secret
     │   └── ls_keyvault.json                        # Azure Key Vault linked service
     ├── dataset/
@@ -240,7 +241,7 @@ The pipeline implements an efficient watermark-based micro-batch extraction patt
 4. **Activity: `nb_process_invoices_dq_silver_gold_copy1` (Synapse Notebook Activity)**
    - Passes the exact Parquet target file path into the notebook parameter cell:
      ```text
-     abfss://raw@sadatapulse360lak.dfs.core.windows.net/invoices/year=YYYY/month=MM/invoices_delta_{RunId}.parquet
+     abfss://raw@<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/invoices/year=YYYY/month=MM/invoices_delta_{RunId}.parquet
      ```
 
 5. **Activity: `nb_gold_data_quality_gx` (Synapse Notebook Activity)**
@@ -291,7 +292,7 @@ df_validated = df_bronze.withColumn(
 )
 ```
 - **Quarantine Storage:** Records failing any check are enriched with a timestamp `quarantined_at` and appended to:
-  `abfss://quarantine@sadatapulse360lak.dfs.core.windows.net/invoices`
+  `abfss://quarantine@<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/invoices`
 - **Clean Storage:** Records passing all checks are stamped with `ingested_at` and passed to Silver.
 
 #### 2. Silver Layer Upsert
@@ -309,7 +310,7 @@ silver_table.alias("tgt").merge(
 
 To eliminate the need for costly full-table scans when building downstream analytics, **Delta Change Data Feed (CDF)** is enabled on the Silver table:
 ```sql
-ALTER TABLE delta.`abfss://silver@sadatapulse360lak.dfs.core.windows.net/invoices` 
+ALTER TABLE delta.`abfss://silver@<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/invoices` 
 SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
 ```
 
@@ -330,7 +331,7 @@ By filtering for `_change_type` in `('insert', 'update_postimage')`, the pipelin
 - **`invoice_date`:** Derived from `billing_period_start`.
 - **`due_date`:** Standardized date format.
 
-The transformed delta is merged into `abfss://gold@sadatapulse360lak.dfs.core.windows.net/fact_invoices`.
+The transformed delta is merged into `abfss://gold@<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/fact_invoices`.
 
 ---
 
@@ -367,7 +368,7 @@ The Gold layer is published without data duplication using Azure Synapse Serverl
 
 - **Database:** `GoldAnalyticsDB`
 - **Credential:** `WorkspaceIdentity` (Managed Identity authentication)
-- **External Data Source:** `DeltaGoldSource` (`https://sadatapulse360lak.dfs.core.windows.net/gold`)
+- **External Data Source:** `DeltaGoldSource` (`https://<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/gold`)
 - **Logical View:** `vw_fact_invoices`
 
 #### Implementation Script (`SQL script 1.json`):
@@ -399,7 +400,7 @@ GO
 
 CREATE EXTERNAL DATA SOURCE DeltaGoldSource
 WITH (
-    LOCATION = 'https://sadatapulse360lak.dfs.core.windows.net/gold',
+    LOCATION = 'https://<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/gold',
     CREDENTIAL = WorkspaceIdentity
 );
 GO
@@ -457,24 +458,24 @@ GROUP BY payment_status;
 | :--- |:-------------------------------------------| :--- |
 | **Azure Subscription** | `[suspcription]`                           | Host cloud subscription. |
 | **Resource Group** | `[Resource group name]`                    | Logical resource container. |
-| **Synapse Workspace** | `dataaisynapse`                            | Unified analytics workspace. |
-| **Apache Spark Pool** | `sparkpoolsmall`                           | Spark 3.5 pool (3 nodes, 4 vCores, 28GB RAM). |
+| **Synapse Workspace** | `<YOUR_SYNAPSE_WORKSPACE>`                            | Unified analytics workspace. |
+| **Apache Spark Pool** | `<YOUR_SPARK_POOL_NAME>`                           | Spark 3.5 pool (3 nodes, 4 vCores, 28GB RAM). |
 | **Serverless SQL Pool** | `Built-in`                                 | On-demand query engine. |
-| **Storage Account** | `sadatapulse360lak`                        | ADLS Gen2 Hierarchical Namespace enabled storage. |
-| **Azure SQL Database** | `sql-datapulse360-srv` / `datapulse360_db` | Source OLTP relational database. |
-| **Azure Key Vault** | `data-ai-sql-db-password`                  | Secret management for credentials. |
+| **Storage Account** | `<YOUR_STORAGE_ACCOUNT_NAME>`                        | ADLS Gen2 Hierarchical Namespace enabled storage. |
+| **Azure SQL Database** | `<YOUR_SQL_SERVER_NAME>` / `<YOUR_SQL_DATABASE_NAME>` | Source OLTP relational database. |
+| **Azure Key Vault** | `<YOUR_KEY_VAULT_NAME>`                  | Secret management for credentials. |
 
 ### Role-Based Access Control (RBAC) & Permissions
 
 Assign the following permissions to ensure seamless communication:
-1. **Synapse Managed Identity (`dataaisynapse`):**
-   - **Storage Blob Data Contributor** on ADLS Gen2 storage account `sadatapulse360lak`.
-   - **Key Vault Secrets User** on Key Vault `data-ai-sql-db-password`.
+1. **Synapse Managed Identity (`<YOUR_SYNAPSE_WORKSPACE>`):**
+   - **Storage Blob Data Contributor** on ADLS Gen2 storage account `<YOUR_STORAGE_ACCOUNT_NAME>`.
+   - **Key Vault Secrets User** on Key Vault `<YOUR_KEY_VAULT_NAME>`.
 2. **Azure SQL Database:**
-   - Database user for `dataaiadmin` with `db_datareader` or specific `SELECT` privileges on `dbo.invoices`.
+   - Database user for `<YOUR_SQL_ADMIN_USER>` with `db_datareader` or specific `SELECT` privileges on `dbo.invoices`.
 3. **Data Engineer / User:**
    - **Synapse Administrator** or **Synapse Contributor** on the Synapse workspace.
-   - **Storage Blob Data Contributor** on `sadatapulse360lak`.
+   - **Storage Blob Data Contributor** on `<YOUR_STORAGE_ACCOUNT_NAME>`.
 
 ### Spark Environment & Dependencies
 
@@ -486,9 +487,70 @@ Ensure the following packages are present in the Synapse Apache Spark 3.5 pool:
 
 ## 8. Setup & Deployment Guide
 
+### Step 0: Pre-Import Configuration & Placeholder Replacement
+
+This repository is completely sanitized and uses standardized placeholders for all Azure-specific resource identifiers. Before importing these templates into your own Azure Synapse workspace, replace the placeholders with your environment values.
+
+#### 1. Placeholder Reference Table
+
+| Placeholder Tag | Description | Where Used                                        | Example Real Value                   |
+| :--- | :--- |:--------------------------------------------------|:-------------------------------------|
+| <YOUR_SUBSCRIPTION_ID> | Azure Subscription GUID | Notebook JSON (365ComputeOptions)                 | 1fbd330e-3c8f-4d39-bcf2-5aeb14a84032 |
+| <YOUR_RESOURCE_GROUP> | Azure Resource Group Name | Notebook JSON (365ComputeOptions)                 | rg-datapulse360-poc                  |
+| <YOUR_SYNAPSE_WORKSPACE> | Synapse Workspace Name | Notebook JSON, Linked Services                    | syn-datapulse360-ws                  |
+| <YOUR_SPARK_POOL_NAME> | Spark Pool Name | Notebook JSON, Pipeline Activity                  | sparkpoolsmall                       |
+| <YOUR_STORAGE_ACCOUNT_NAME> | ADLS Gen2 Account Name | Linked Services, Pipelines, Notebooks, SQL Script | sadatapulse360lak                    |
+| <YOUR_SQL_SERVER_NAME> | Azure SQL Logical Server Name | Linked Service (ls_azuresql_source)               | sql-datapulse360-srv                 |
+| <YOUR_SQL_DATABASE_NAME> | Azure SQL Database Name | Linked Service (ls_azuresql_source)               | datapulse360_db                      |
+| <YOUR_SQL_ADMIN_USER> | SQL Server Admin Username | Linked Service (ls_azuresql_source)               | sqladminuser                         |
+| <YOUR_KEY_VAULT_NAME> | Azure Key Vault Name | Linked Service (ls_keyvault)                      | kv-datapulse360                      |
+
+---
+
+#### 2. Automated One-Line Find & Replace Script
+
+You can replace all placeholders across the entire repository in 5 seconds using PowerShell before importing into Synapse Studio:
+
+``powershell
+# 1. Open PowerShell in this repository root and set your Azure environment values:
+$SUBSCRIPTION_ID = "your-actual-subscription-id"
+$RESOURCE_GROUP  = "your-actual-resource-group"
+$SYNAPSE_WS      = "your-actual-synapse-workspace"
+$SPARK_POOL      = "sparkpoolsmall"
+$STORAGE_ACC     = "your-actual-storage-account"
+$SQL_SERVER      = "your-actual-sql-server"
+$SQL_DB          = "datapulse360_db"
+$SQL_USER        = "sqladminuser"
+$KEY_VAULT       = "your-actual-key-vault"
+
+# 2. Execute replacement across all JSON, Python, and SQL files:
+Get-ChildItem -Path . -Recurse -Include *.json, *.py, *.sql, *.ipynb | ForEach-Object {
+    (Get-Content $_.FullName) `
+        -replace '<YOUR_SUBSCRIPTION_ID>', $SUBSCRIPTION_ID `
+        -replace '<YOUR_RESOURCE_GROUP>', $RESOURCE_GROUP `
+        -replace '<YOUR_SYNAPSE_WORKSPACE>', $SYNAPSE_WS `
+        -replace '<YOUR_SPARK_POOL_NAME>', $SPARK_POOL `
+        -replace '<YOUR_STORAGE_ACCOUNT_NAME>', $STORAGE_ACC `
+        -replace '<YOUR_SQL_SERVER_NAME>', $SQL_SERVER `
+        -replace '<YOUR_SQL_DATABASE_NAME>', $SQL_DB `
+        -replace '<YOUR_SQL_ADMIN_USER>', $SQL_USER `
+        -replace '<YOUR_KEY_VAULT_NAME>', $KEY_VAULT |
+    Set-Content $_.FullName
+}
+Write-Host "? All placeholders successfully replaced with your Azure environment details!" -ForegroundColor Green
+``
+
+#### 3. Manual Find & Replace (VS Code)
+1. Open this repository folder in **VS Code**.
+2. Press Ctrl + Shift + H (Global Search and Replace).
+3. Search for each placeholder tag (e.g., <YOUR_STORAGE_ACCOUNT_NAME>) and replace it with your actual resource name.
+4. Click **Replace All**.
+
+---
+
 ### Step 1: ADLS Gen2 Storage Setup
 
-1. In the Azure Portal, open the storage account `sadatapulse360lak`.
+1. In the Azure Portal, open the storage account `<YOUR_STORAGE_ACCOUNT_NAME>`.
 2. Navigate to **Containers** under **Data storage**.
 3. Create the four medallion containers:
    - `raw`
@@ -500,18 +562,18 @@ Ensure the following packages are present in the Synapse Apache Spark 3.5 pool:
 
 ### Step 2: Azure Key Vault & Secret Storage
 
-1. Open Azure Key Vault `data-ai-sql-db-password`.
+1. Open Azure Key Vault `<YOUR_KEY_VAULT_NAME>`.
 2. Under **Objects > Secrets**, select **Generate/Import**.
 3. Create secret:
    - **Name:** `sql-db-password`
-   - **Secret Value:** *(Enter the password for SQL user `dataaiadmin`)*
+   - **Secret Value:** *(Enter the password for SQL user `<YOUR_SQL_ADMIN_USER>`)*
 4. Ensure the Synapse workspace Managed Identity has **Key Vault Secrets User** assigned.
 
 ---
 
 ### Step 3: Source Azure SQL Database Setup
 
-1. Connect to Azure SQL Database `sql-datapulse360-srv.database.windows.net` / `datapulse360_db` using SSMS or Azure Data Studio.
+1. Connect to Azure SQL Database `<YOUR_SQL_SERVER_NAME>.database.windows.net` / `<YOUR_SQL_DATABASE_NAME>` using SSMS or Azure Data Studio.
 2. Execute the table DDL to create `dbo.invoices`:
 
 ```sql
@@ -554,9 +616,9 @@ VALUES
 ### Step 4: Linked Services & Datasets Configuration
 
 In Synapse Studio, verify or import the JSON definitions located in [`synapse/linkedService/`](synapse/linkedService/):
-- [`ls_keyvault.json`](synapse/linkedService/ls_keyvault.json): Points to `https://data-ai-sql-db-password.vault.azure.net/`.
-- [`ls_azuresql_source.json`](synapse/linkedService/ls_azuresql_source.json): Points to `sql-datapulse360-srv.database.windows.net`, references `ls_keyvault` secret `sql-db-password`.
-- [`datapulse360dl.json`](synapse/linkedService/datapulse360dl.json): Points to `https://sadatapulse360lak.dfs.core.windows.net/` using Managed Identity.
+- [`ls_keyvault.json`](synapse/linkedService/ls_keyvault.json): Points to `https://<YOUR_KEY_VAULT_NAME>.vault.azure.net/`.
+- [`ls_azuresql_source.json`](synapse/linkedService/ls_azuresql_source.json): Points to `<YOUR_SQL_SERVER_NAME>.database.windows.net`, references `ls_keyvault` secret `sql-db-password`.
+- [`datapulse360dl.json`](synapse/linkedService/datapulse360dl.json): Points to `https://<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/` using Managed Identity.
 
 Import the datasets from [`synapse/dataset/`](synapse/dataset/):
 - [`AzureSqlTable1.json`](synapse/dataset/AzureSqlTable1.json): Maps to `dbo.invoices`.
@@ -567,7 +629,7 @@ Import the datasets from [`synapse/dataset/`](synapse/dataset/):
 ### Step 5: Synapse Spark Pool Configuration
 
 1. In Synapse Studio, navigate to **Manage > Apache Spark pools**.
-2. Verify or create pool `sparkpoolsmall`:
+2. Verify or create pool `<YOUR_SPARK_POOL_NAME>`:
    - **Node size:** Small (4 vCPU / 28 GB RAM)
    - **Autoscale:** Disabled (or 3-3 nodes)
    - **Spark version:** 3.5
@@ -584,7 +646,7 @@ Import the datasets from [`synapse/dataset/`](synapse/dataset/):
 1. Under **Develop > Notebooks**, import:
    - [`nb_process_invoices_dq_silver_gold.json`](synapse/notebook/nb_process_invoices_dq_silver_gold.json)
    - [`nb_gold_data_quality_gx.json`](synapse/notebook/nb_gold_data_quality_gx.json)
-2. Attach both notebooks to `sparkpoolsmall`.
+2. Attach both notebooks to `<YOUR_SPARK_POOL_NAME>`.
 3. Under **Integrate > Pipelines**, import:
    - [`pl_ingest_invoices_incremental.json`](synapse/pipeline/pl_ingest_invoices_incremental.json)
 4. Under **Manage > Triggers**, import:
@@ -632,7 +694,7 @@ GO
 
 CREATE EXTERNAL DATA SOURCE DeltaGoldSource
 WITH (
-    LOCATION = 'https://sadatapulse360lak.dfs.core.windows.net/gold',
+    LOCATION = 'https://<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/gold',
     CREDENTIAL = WorkspaceIdentity
 );
 GO
@@ -696,7 +758,7 @@ To activate scheduled execution:
 3. **Quarantine Inspection:** To check rows quarantined during pipeline execution, query the quarantine container in Serverless SQL or Spark:
    ```sql
    SELECT * FROM OPENROWSET(
-       BULK 'https://sadatapulse360lak.dfs.core.windows.net/quarantine/invoices/',
+       BULK 'https://<YOUR_STORAGE_ACCOUNT_NAME>.dfs.core.windows.net/quarantine/invoices/',
        FORMAT = 'DELTA'
    ) AS [bad_records];
    ```
@@ -770,7 +832,7 @@ To activate scheduled execution:
 > [!NOTE]
 > **Image Name:** `adls-storage-containers.png`  
 > **Location:** `images/adls-storage-containers.png`  
-> **Description:** Screenshot from Azure Portal or Azure Storage Explorer showing containers: `raw`, `quarantine`, `silver`, and `gold` inside storage account `sadatapulse360lak`.
+> **Description:** Screenshot from Azure Portal or Azure Storage Explorer showing containers: `raw`, `quarantine`, `silver`, and `gold` inside storage account `<YOUR_STORAGE_ACCOUNT_NAME>`.
 
 ```markdown
 ![ADLS Gen2 Storage Containers](images/adls-storage-containers.png)

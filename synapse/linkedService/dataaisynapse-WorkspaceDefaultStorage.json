@@ -1,9 +1,9 @@
 {
-	"name": "dataaisynapse-WorkspaceDefaultStorage",
+	"name": "<YOUR_SYNAPSE_WORKSPACE>-WorkspaceDefaultStorage",
 	"type": "Microsoft.Synapse/workspaces/linkedservices",
 	"properties": {
 		"typeProperties": {
-			"url": "https://dataaisynapsestorage.dfs.core.windows.net"
+			"url": "https://<YOUR_SYNAPSE_WORKSPACE>storage.dfs.core.windows.net"
 		},
 		"type": "AzureBlobFS",
 		"connectVia": {
