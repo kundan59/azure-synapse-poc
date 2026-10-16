@@ -482,6 +482,40 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/trigger-pipeline')]",
+			"type": "Microsoft.Synapse/workspaces/triggers",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "pl_ingest_invoices_incremental",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"WindowStart": "[parameters('trigger-pipeline_properties_pipeline_parameters_WindowStart')]",
+						"WindowEnd": "[parameters('trigger-pipeline_properties_pipeline_parameters_WindowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Minute",
+					"interval": 5,
+					"startTime": "2026-10-16T07:46:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
 			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
 			"apiVersion": "2019-06-01-preview",
@@ -969,40 +1003,6 @@
 			},
 			"dependsOn": [],
 			"location": "centralindia"
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/trigger-pipeline')]",
-			"type": "Microsoft.Synapse/workspaces/triggers",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"runtimeState": "Started",
-				"pipeline": {
-					"pipelineReference": {
-						"referenceName": "pl_ingest_invoices_incremental",
-						"type": "PipelineReference"
-					},
-					"parameters": {
-						"WindowStart": "[parameters('trigger-pipeline_properties_pipeline_parameters_WindowStart')]",
-						"WindowEnd": "[parameters('trigger-pipeline_properties_pipeline_parameters_WindowEnd')]"
-					}
-				},
-				"type": "TumblingWindowTrigger",
-				"typeProperties": {
-					"frequency": "Minute",
-					"interval": 5,
-					"startTime": "2026-10-16T07:46:00Z",
-					"delay": "00:00:00",
-					"maxConcurrency": 50,
-					"retryPolicy": {
-						"intervalInSeconds": 30
-					},
-					"dependsOn": []
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
-			]
 		}
 	]
 }
