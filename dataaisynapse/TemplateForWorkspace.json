@@ -36,11 +36,11 @@
 			"type": "string",
 			"defaultValue": "https://data-ai-sql-db-password.vault.azure.net/"
 		},
-		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart": {
+		"trigger-pipeline_properties_pipeline_parameters_WindowStart": {
 			"type": "string",
 			"defaultValue": "@trigger().outputs.windowStartTime"
 		},
-		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd": {
+		"trigger-pipeline_properties_pipeline_parameters_WindowEnd": {
 			"type": "string",
 			"defaultValue": "@trigger().outputs.windowEndTime"
 		}
@@ -482,40 +482,6 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('workspaceName'), '/tr_invoices_hourly_window')]",
-			"type": "Microsoft.Synapse/workspaces/triggers",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"runtimeState": "Stopped",
-				"pipeline": {
-					"pipelineReference": {
-						"referenceName": "pl_ingest_invoices_incremental",
-						"type": "PipelineReference"
-					},
-					"parameters": {
-						"WindowStart": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart')]",
-						"WindowEnd": "[parameters('tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd')]"
-					}
-				},
-				"type": "TumblingWindowTrigger",
-				"typeProperties": {
-					"frequency": "Minute",
-					"interval": 5,
-					"startTime": "2026-10-13T10:11:00Z",
-					"delay": "00:00:00",
-					"maxConcurrency": 50,
-					"retryPolicy": {
-						"intervalInSeconds": 30
-					},
-					"dependsOn": []
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
-			]
-		},
-		{
 			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
 			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
 			"apiVersion": "2019-06-01-preview",
@@ -585,7 +551,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "79a355a4-2f9f-46ac-86da-dab8d2588983"
+						"spark.autotune.trackingId": "4ee93046-88ef-456d-ae3b-890caca40ccd"
 					}
 				},
 				"metadata": {
@@ -610,15 +576,13 @@
 						"sparkVersion": "3.5",
 						"nodeCount": 3,
 						"cores": 4,
-						"memory": 28,
-						"automaticScaleJobs": false
+						"memory": 28
 					},
 					"sessionKeepAliveTimeout": 30
 				},
 				"cells": [
 					{
 						"cell_type": "code",
-						"metadata": {},
 						"source": [
 							"# ==============================================================================\n",
 							"# Great Expectations Data Quality Suite for Gold Delta Table\n",
@@ -759,7 +723,7 @@
 						"spark.dynamicAllocation.enabled": "false",
 						"spark.dynamicAllocation.minExecutors": "2",
 						"spark.dynamicAllocation.maxExecutors": "2",
-						"spark.autotune.trackingId": "b8d957a3-854f-48c3-b0c0-eee9111ca1bc"
+						"spark.autotune.trackingId": "446e7f68-cd1b-4432-a7e8-845a2392413b"
 					}
 				},
 				"metadata": {
@@ -784,8 +748,7 @@
 						"sparkVersion": "3.5",
 						"nodeCount": 3,
 						"cores": 4,
-						"memory": 28,
-						"automaticScaleJobs": false
+						"memory": 28
 					},
 					"sessionKeepAliveTimeout": 30
 				},
@@ -1006,6 +969,40 @@
 			},
 			"dependsOn": [],
 			"location": "centralindia"
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/trigger-pipeline')]",
+			"type": "Microsoft.Synapse/workspaces/triggers",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "pl_ingest_invoices_incremental",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"WindowStart": "[parameters('trigger-pipeline_properties_pipeline_parameters_WindowStart')]",
+						"WindowEnd": "[parameters('trigger-pipeline_properties_pipeline_parameters_WindowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Minute",
+					"interval": 5,
+					"startTime": "2026-10-16T07:46:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/pipelines/pl_ingest_invoices_incremental')]"
+			]
 		}
 	]
 }

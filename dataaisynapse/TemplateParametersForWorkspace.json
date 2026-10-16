@@ -26,10 +26,10 @@
 		"ls_keyvault_properties_typeProperties_baseUrl": {
 			"value": "https://data-ai-sql-db-password.vault.azure.net/"
 		},
-		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowStart": {
+		"trigger-pipeline_properties_pipeline_parameters_WindowStart": {
 			"value": "@trigger().outputs.windowStartTime"
 		},
-		"tr_invoices_hourly_window_properties_pipeline_parameters_WindowEnd": {
+		"trigger-pipeline_properties_pipeline_parameters_WindowEnd": {
 			"value": "@trigger().outputs.windowEndTime"
 		}
 	}
